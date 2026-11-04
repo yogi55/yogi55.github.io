@@ -332,9 +332,10 @@
         sections.forEach(function (s, k) {
           var ne = Math.max(eff, fitEff(s));
           if (k > 0) segs.push({ t: "hold", len: G.hold });
-          /* чим більше робіт у році, тим довше їх «затягуємо» на сторінку */
-          segs.push({ t: "fly", k: k, a: eff, b: ne, len: vh * (0.45 + 0.05 * s.cards.length) });
-          eff = ne;
+          /* спершу вміст повільно підсувається вгору, звільняючи місце під новий рік */
+          if (ne > eff) { segs.push({ t: "lift", a: eff, b: ne, len: (ne - eff) * 2 }); eff = ne; }
+          /* потім роботи по одній долітають; чим їх більше, тим довше */
+          segs.push({ t: "fly", k: k, len: vh * (0.45 + 0.05 * s.cards.length) });
         });
         if (worldEnd > eff) segs.push({ t: "scroll", a: eff, b: worldEnd, len: worldEnd - eff });
       }
@@ -348,7 +349,8 @@
       for (var i = 0; i < segs.length; i++) {
         var sg = segs[i], p = clamp((sy - pos) / (sg.len || 1), 0, 1);
         if (sg.t === "arrow") st.arrow = p;
-        else if (sg.t === "fly") { st.fly[sg.k] = p; st.eff = sg.a + (sg.b - sg.a) * p; }
+        else if (sg.t === "fly") st.fly[sg.k] = p;
+        else if (sg.t === "lift") st.eff = sg.a + (sg.b - sg.a) * (p < 0.5 ? 2 * p * p : 1 - 2 * (1 - p) * (1 - p));
         else if (sg.t === "scroll") st.eff = sg.a + (sg.b - sg.a) * p;
         pos += sg.len;
         if (sy < pos) break;
