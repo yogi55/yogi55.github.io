@@ -66,7 +66,9 @@
     .strip span { display: block; height: var(--h); line-height: var(--h); }
 
     /* Рік = звичайний блок на сторінці: стрілка, під нею сітка робіт */
-    .year { position: relative; }
+    .track { position: relative; }
+    .pin { position: sticky; top: var(--topH, 200px); overflow: hidden; overflow: clip; }
+    .world { position: relative; will-change: transform; }
 
     .stem { position: relative; width: 1px; margin: 0 auto; }
     .stem i {
@@ -151,7 +153,6 @@
   </header>
 
   <main id="years"></main>
-  <div class="end" id="end"></div>
   <noscript><p>Для перегляду хронології потрібен JavaScript.</p></noscript>
 
   <script>
@@ -193,7 +194,10 @@
     var stem = document.createElement("div"); stem.className = "stem"; stem.innerHTML = "<i><b></b></i>";
     var line = stem.firstChild;
     var grid = document.createElement("div"); grid.className = "grid";
-    main.appendChild(stem); main.appendChild(grid);
+    var track = document.createElement("div"); track.className = "track";
+    var pin = document.createElement("div"); pin.className = "pin";
+    var world = document.createElement("div"); world.className = "world";
+    world.appendChild(stem); world.appendChild(grid); pin.appendChild(world); track.appendChild(pin); main.appendChild(track);
     var totalRows = 0;
     var sections = YEARS.map(function (y) {
       var cards = y.works.map(function (w, wi) {
@@ -205,7 +209,7 @@
         c.appendChild(t); grid.appendChild(c);
         return c;
       });
-      var sec = { year: y.year, cards: cards, rowStart: totalRows };
+      var sec = { year: y.year, cards: cards, rowStart: totalRows, rows: Math.ceil(cards.length / COLS) };
       totalRows += Math.ceil(cards.length / COLS);
       return sec;
     });
@@ -276,21 +280,35 @@
       if (Math.abs(dx) > 50) show(cur + (dx < 0 ? 1 : -1));
     }, { passive: true });
 
-    /* ---- Геометрія ---- */
-    var G = {};
+    /* ---- Геометрія і сценарій скролу ----
+       Сцена закріплена під шапкою, а скрол керує «сценарієм»:
+       стрілка → політ робіт року → (прокрутка вмісту, якщо рік не влазить) → пауза → політ наступного року … */
+    var G = {}, segs = [], totalLen = 0;
+    function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+    function ease(t) { return 1 - Math.pow(1 - t, 3); }
+
     function measure() {
       var vh = window.innerHeight, vw = window.innerWidth;
+      var topH = topEl.offsetHeight;
+      var pinH = Math.max(300, vh - topH);
       var gap = vw < 600 ? 6 : 15;
       var gridW = Math.min(860, vw * 0.92);
       var cw = Math.min(156, (gridW - gap * (COLS - 1)) / COLS);
       var ch = cw * A4;
       var stemH = Math.max(110, Math.min(300, vh * 0.28));
       var Lmin = Math.max(56, Math.min(100, vh * 0.09));
-      G = { vh: vh, gap: gap, cw: cw, ch: ch, stemH: stemH, Lmin: Lmin, D: vh * 0.6 };
+      var stemBlock = stemH + 14;
+      var gridH = totalRows * ch + (totalRows - 1) * gap;
+      G = { vh: vh, topH: topH, pinH: pinH, gap: gap, cw: cw, ch: ch, stemH: stemH, Lmin: Lmin,
+            stemBlock: stemBlock, worldH: stemBlock + gridH + vh * 0.08,
+            hold: vh * 0.25,   /* пауза між роками: приблизно 2-3 «клацання» колеса */
+            fly: vh * 0.4 };   /* скільки скролу триває політ робіт одного року */
       var rowW = COLS * cw + (COLS - 1) * gap;
-      stem.style.height = (stemH + 14) + "px";
+      document.documentElement.style.setProperty("--topH", topH + "px");
+      pin.style.height = pinH + "px";
+      stem.style.height = stemBlock + "px";
       grid.style.width = rowW + "px";
-      grid.style.height = (totalRows * ch + (totalRows - 1) * gap) + "px";
+      grid.style.height = gridH + "px";
       sections.forEach(function (s) {
         s.cards.forEach(function (c, i) {
           var row = s.rowStart + Math.floor(i / COLS);
@@ -299,34 +317,63 @@
           c.style.top = (row * (ch + gap)) + "px";
         });
       });
-      document.getElementById("end").style.height = Math.round(G.D) + "px";
+
+      /* сценарій */
+      segs = [];
+      var worldEnd = Math.max(0, G.worldH - pinH), eff = 0;
+      function fitEff(s) {   /* наскільки треба підняти вміст, щоб увесь рік було видно */
+        var bottom = stemBlock + (s.rowStart + s.rows) * (ch + gap) - gap;
+        return clamp(bottom - pinH + 24, 0, worldEnd);
+      }
+      if (reduce) {
+        segs.push({ t: "scroll", a: 0, b: worldEnd, len: worldEnd });
+      } else {
+        segs.push({ t: "arrow", len: vh * 0.3 });
+        sections.forEach(function (s, k) {
+          var ne = Math.max(eff, fitEff(s));
+          if (ne > eff) { segs.push({ t: "scroll", a: eff, b: ne, len: ne - eff }); eff = ne; }
+          if (k > 0) segs.push({ t: "hold", len: G.hold });
+          segs.push({ t: "fly", k: k, len: G.fly });
+        });
+        if (worldEnd > eff) segs.push({ t: "scroll", a: eff, b: worldEnd, len: worldEnd - eff });
+      }
+      totalLen = segs.reduce(function (n, sg) { return n + sg.len; }, 0);
+      track.style.height = (pinH + totalLen) + "px";
     }
 
-    function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
-    function ease(t) { return 1 - Math.pow(1 - t, 3); }
+    function stateAt(sy) {
+      var st = { eff: 0, arrow: reduce ? 1 : 0, fly: sections.map(function () { return reduce ? 1 : 0; }) };
+      var pos = 0;
+      for (var i = 0; i < segs.length; i++) {
+        var sg = segs[i], p = clamp((sy - pos) / (sg.len || 1), 0, 1);
+        if (sg.t === "arrow") st.arrow = p;
+        else if (sg.t === "fly") st.fly[sg.k] = p;
+        else if (sg.t === "scroll") st.eff = sg.a + (sg.b - sg.a) * p;
+        pos += sg.len;
+        if (sy < pos) break;
+      }
+      return st;
+    }
 
     /* ---- Кадр: усе залежить тільки від позиції скролу ---- */
     function frame() {
-      var vh = G.vh, gap = G.gap, ch = G.ch;
-      var sy = window.pageYOffset;
-      var gridTop = grid.getBoundingClientRect().top;
+      var gap = G.gap, ch = G.ch;
+      var st = stateAt(window.pageYOffset);
+      world.style.transform = "translate3d(0," + (-st.eff) + "px,0)";
+      line.style.height = (G.Lmin + (G.stemH - G.Lmin) * ease(st.arrow)) + "px";
 
-      /* 1) на початку стрілка витягується вниз */
-      var a = reduce ? 1 : ease(clamp(sy / (vh * 0.3), 0, 1));
-      line.style.height = (G.Lmin + (G.stemH - G.Lmin) * a) + "px";
-
-      /* 2) потім роботи прилітають знизу й лишаються в сітці; наступний рік долітає під попередніми */
-      var hold = reduce ? 0 : (1 - clamp((sy - vh * 0.25) / (vh * 0.45), 0, 1)) * vh * 0.6;
       var active = sections[0].year;
-      sections.forEach(function (s) {
-        var firstE = 0;
+      sections.forEach(function (s, k) {
+        var maxDelay = (COLS - 1) * 0.1 + (s.rows - 1) * 0.15, firstE = 0;
         s.cards.forEach(function (c, i) {
-          var col = i % COLS, row = s.rowStart + Math.floor(i / COLS);
-          var ref = gridTop + row * (ch + gap) + col * vh * 0.02 + hold;
-          var e = reduce ? 1 : ease(clamp((vh - ref) / (vh * 0.4), 0, 1));
+          var col = i % COLS, rowL = Math.floor(i / COLS);
+          var delay = col * 0.1 + rowL * 0.15;
+          var e = reduce ? 1 : ease(clamp(st.fly[k] * (1 + maxDelay) - delay, 0, 1));
+          var restY = G.stemBlock + (s.rowStart + rowL) * (ch + gap) - st.eff;   /* де картка стоїть на місці (у сцені) */
+          var off = (1 - e) * Math.max(0, G.pinH - restY + 40);                  /* завжди стартує під нижнім краєм екрана */
+          c.style.transform = "translate3d(0," + off + "px,0)";
+          c.style.setProperty("--tr", Math.min(240, (1 - e) * (50 + col * 40 + (s.rowStart + rowL) * 20)) + "px");
           if (i === 0) firstE = e;
-          c.style.transform = "translate3d(0," + ((1 - e) * G.D) + "px,0)";
-          c.style.setProperty("--tr", Math.min(240, (1 - e) * (50 + col * 40 + row * 20)) + "px");
         });
         if (firstE > 0.3) active = s.year;
       });
