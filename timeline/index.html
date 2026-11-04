@@ -35,14 +35,6 @@
       text-align: center;
       padding: clamp(18px, 4.5vh, 44px) 16px 10px;
     }
-    .top::after {
-      content: "";
-      position: absolute;
-      left: 0; right: 0; top: 100%;
-      height: 28px;
-      background: linear-gradient(var(--bg), rgba(38,38,38,0));
-      pointer-events: none;
-    }
     .top h1 { margin: 0; font-weight: 600; font-size: clamp(18px, 2.4vw, 32px); line-height: 1.2; }
     .top h1 a { color: inherit; text-decoration: none; }
     .role { margin: 6px 0 0; font-weight: 500; font-size: clamp(10px, 1.05vw, 15px); }
@@ -329,24 +321,30 @@
 
       /* сценарій */
       segs = [];
-      var worldEnd = Math.max(0, G.worldH - pinH), eff = 0;
-      function fitEff(s) {   /* наскільки треба підняти вміст, щоб увесь рік було видно */
+      var eff = 0;
+      /* Вміст ніколи не зупиняється «на півдорозі»: верхній ряд або стоїть рівно під шапкою, або повністю сховався вгору */
+      function snapEff(minEff) {
+        if (minEff <= 0) return 0;
+        var base = stemBlock - gap, stride = ch + gap;
+        return base + Math.max(0, Math.ceil((minEff - base) / stride)) * stride;
+      }
+      function fitEff(s) {   /* найменше «чисте» положення, при якому увесь рік видно на екрані */
         var bottom = stemBlock + (s.rowStart + s.rows) * (ch + gap) - gap;
-        return clamp(bottom - pinH + 24, 0, worldEnd);
+        return snapEff(bottom - pinH + 24);
       }
       if (reduce) {
-        segs.push({ t: "scroll", a: 0, b: worldEnd, len: worldEnd });
+        var last = Math.max.apply(null, sections.map(fitEff));
+        segs.push({ t: "scroll", a: 0, b: last, len: last });
       } else {
         segs.push({ t: "arrow", len: FEEL.arrow });
         sections.forEach(function (s, k) {
           var ne = Math.max(eff, fitEff(s));
-          if (k > 0) segs.push({ t: "hold", len: G.hold });
+          if (k > 0) segs.push({ t: "hold", len: FEEL.hold });
           /* спершу вміст повільно підсувається вгору, звільняючи місце під новий рік */
           if (ne > eff) { segs.push({ t: "lift", a: eff, b: ne, len: (ne - eff) * FEEL.liftRatio }); eff = ne; }
           /* потім роботи по одній долітають; чим їх більше, тим довше */
           segs.push({ t: "fly", k: k, len: FEEL.flyBase + FEEL.perWork * s.cards.length });
         });
-        if (worldEnd > eff) segs.push({ t: "scroll", a: eff, b: worldEnd, len: worldEnd - eff });
       }
       totalLen = segs.reduce(function (n, sg) { return n + sg.len; }, 0);
       track.style.height = (pinH + totalLen) + "px";
