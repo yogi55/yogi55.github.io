@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Георгій Сагітов</title>
+  <meta name="description" content="Георгій Сагітов — графічний дизайнер, аніматор і художник. Сайт у розробці.">
+  <meta property="og:title" content="Георгій Сагітов">
+  <meta property="og:description" content="Графічний дизайнер, аніматор і художник.">
+  <meta property="og:type" content="website">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:wght@500&family=Old+Standard+TT:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f6f1e7;
+      --text: #231f1a;
+      --muted: #7a7064;
+      --accent: #8a2f1d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1714;
+        --text: #efe8da;
+        --muted: #9a9082;
+        --accent: #e0775f;
+      }
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "EB Garamond", Georgia, serif;
+      font-weight: 500;
+      font-size: 20px;
+      line-height: 1.5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    main { max-width: 560px; width: 100%; }
+    h1 {
+      font-family: "Old Standard TT", Georgia, serif;
+      font-weight: 700;
+      font-size: clamp(36px, 8vw, 56px);
+      line-height: 1.1;
+      margin: 0 0 8px;
+    }
+    .role { color: var(--muted); margin: 0 0 48px; }
+    .project {
+      display: block;
+      text-decoration: none;
+      color: inherit;
+      border-top: 1px solid var(--muted);
+      border-bottom: 1px solid var(--muted);
+      padding: 24px 0;
+      transition: color .2s;
+    }
+    .project:hover, .project:focus-visible { color: var(--accent); }
+    .project small { display: block; color: var(--muted); font-size: 16px; margin-bottom: 4px; }
+    .project strong {
+      font-family: "Old Standard TT", Georgia, serif;
+      font-size: clamp(26px, 5vw, 34px);
+      font-weight: 700;
+    }
+    .project span { display: block; margin-top: 4px; }
+    .project .arrow { display: inline-block; transition: transform .2s; }
+    .project:hover .arrow { transform: translateX(6px); }
+    footer { margin-top: 32px; color: var(--muted); font-size: 16px; }
+    footer a { color: inherit; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Георгій Сагітов</h1>
+    <p class="role">Графічний дизайнер, аніматор, художник</p>
+
+    <a class="project" href="https://yogi55.github.io/Hromove-yabluchko/">
+      <small>Проєкт</small>
+      <strong>Громове яблучко</strong>
+      <span>31 тиха глава: ілюстрації, текст і озвучення <span class="arrow">→</span></span>
+    </a>
+
+    <footer>
+      Сайт у розробці. <a href="https://instagram.com/yogi55">Instagram</a>
+    </footer>
+  </main>
+</body>
+</html>
