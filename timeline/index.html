@@ -338,12 +338,20 @@
       } else {
         segs.push({ t: "arrow", len: FEEL.arrow });
         sections.forEach(function (s, k) {
-          var ne = Math.max(eff, fitEff(s));
+          var n = s.cards.length, w = 0.4, step = n > 1 ? (1 - w) / (n - 1) : 0;
           if (k > 0) segs.push({ t: "hold", len: FEEL.hold });
-          /* спершу вміст повільно підсувається вгору, звільняючи місце під новий рік */
-          if (ne > eff) { segs.push({ t: "lift", a: eff, b: ne, len: (ne - eff) * FEEL.liftRatio }); eff = ne; }
-          /* потім роботи по одній долітають; чим їх більше, тим довше */
-          segs.push({ t: "fly", k: k, len: FEEL.flyBase + FEEL.perWork * s.cards.length });
+          /* рік летить рядами: підсув угору лише тоді, коли наступному ряду бракує місця; старі ряди лишаються на екрані */
+          var from = 0;
+          for (var r = 0; r < s.rows; r++) {
+            var lastIdx = Math.min(n - 1, (r + 1) * COLS - 1);
+            var to = r === s.rows - 1 ? 1 : lastIdx * step + w;
+            var bottom = stemBlock + (s.rowStart + r + 1) * (ch + gap) - gap;
+            var ne = Math.max(eff, snapEff(bottom - pinH + 24));
+            if (ne > eff) { segs.push({ t: "lift", a: eff, b: ne, len: (ne - eff) * FEEL.liftRatio }); eff = ne; }
+            var cnt = lastIdx - r * COLS + 1;
+            segs.push({ t: "fly", k: k, a: from, b: to, len: FEEL.flyBase * (to - from) + FEEL.perWork * cnt });
+            from = to;
+          }
         });
       }
       totalLen = segs.reduce(function (n, sg) { return n + sg.len; }, 0);
@@ -356,7 +364,7 @@
       for (var i = 0; i < segs.length; i++) {
         var sg = segs[i], p = clamp((sy - pos) / (sg.len || 1), 0, 1);
         if (sg.t === "arrow") st.arrow = p;
-        else if (sg.t === "fly") st.fly[sg.k] = p;
+        else if (sg.t === "fly") st.fly[sg.k] = sg.a + (sg.b - sg.a) * p;
         else if (sg.t === "lift") st.eff = sg.a + (sg.b - sg.a) * (p < 0.5 ? 2 * p * p : 1 - 2 * (1 - p) * (1 - p));
         else if (sg.t === "scroll") st.eff = sg.a + (sg.b - sg.a) * p;
         pos += sg.len;
