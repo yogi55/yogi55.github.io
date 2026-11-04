@@ -65,16 +65,16 @@
     .strip { display: block; transition: transform .9s cubic-bezier(.2, .8, .2, 1); }
     .strip span { display: block; height: var(--h); line-height: var(--h); }
 
-    /* Рік = висока секція; сцена всередині "прилипає" під шапкою */
+    /* Рік = звичайний блок на сторінці: стрілка, під нею сітка робіт */
     .year { position: relative; }
-    .stage { position: sticky; top: var(--topH, 200px); overflow: hidden; overflow: clip; }
 
-    .stem {
+    .stem { position: relative; width: 1px; margin: 0 auto; }
+    .stem i {
       position: absolute;
-      left: 50%;
+      left: 0;
       top: 0;
       width: 1px;
-      margin-left: -.5px;
+      height: 0;
       background: var(--line);
     }
     .stem b {
@@ -88,7 +88,7 @@
       transform: translate(-50%, -4px) rotate(45deg);
     }
 
-    .grid { position: absolute; left: 50%; top: 0; }
+    .grid { position: relative; margin: 0 auto; }
     .card {
       position: absolute;
       margin: 0;
@@ -136,7 +136,7 @@
     .lb-prev { left: 8px; }
     .lb-next { right: 8px; }
 
-    .end { height: 24vh; }
+    .end { height: 40vh; }
     noscript p { text-align: center; color: var(--muted); padding: 40px 16px; }
   </style>
 </head>
@@ -151,7 +151,7 @@
   </header>
 
   <main id="years"></main>
-  <div class="end"></div>
+  <div class="end" id="end"></div>
   <noscript><p>Для перегляду хронології потрібен JavaScript.</p></noscript>
 
   <script>
@@ -192,8 +192,7 @@
     /* ---- Секції років ---- */
     var sections = YEARS.map(function (y) {
       var sec = document.createElement("section"); sec.className = "year";
-      var stage = document.createElement("div"); stage.className = "stage";
-      var stem = document.createElement("div"); stem.className = "stem"; stem.innerHTML = "<b></b>";
+      var stem = document.createElement("div"); stem.className = "stem"; stem.innerHTML = "<i><b></b></i>";
       var grid = document.createElement("div"); grid.className = "grid";
       var cards = y.works.map(function (w, wi) {
         var c = document.createElement("figure"); c.className = "card";
@@ -204,8 +203,8 @@
         c.appendChild(t); grid.appendChild(c);
         return c;
       });
-      stage.appendChild(stem); stage.appendChild(grid); sec.appendChild(stage); main.appendChild(sec);
-      return { year: y.year, sec: sec, stage: stage, stem: stem, grid: grid, cards: cards };
+      sec.appendChild(stem); sec.appendChild(grid); main.appendChild(sec);
+      return { year: y.year, sec: sec, stem: stem, line: stem.firstChild, grid: grid, cards: cards };
     });
 
     /* ---- Перегляд роботи на весь екран ---- */
@@ -278,29 +277,26 @@
     var G = {};
     function measure() {
       var vh = window.innerHeight, vw = window.innerWidth;
-      var topH = topEl.offsetHeight;
-      var stageH = Math.max(320, vh - topH);
       var gap = vw < 600 ? 6 : 15;
       var gridW = Math.min(860, vw * 0.92);
       var cw = Math.min(156, (gridW - gap * (COLS - 1)) / COLS);
       var ch = cw * A4;
-      var Ls = Math.max(56, Math.min(110, vh * 0.1));
-      G = { vh: vh, topH: topH, stageH: stageH, gap: gap, cw: cw, ch: ch,
-            Ls: Ls, Llong: stageH - 24, y0: Ls + 14, runway: reduce ? 0 : vh * 1.5 };
-      document.documentElement.style.setProperty("--topH", topH + "px");
-      sections.forEach(function (s) {
-        s.sec.style.height = (stageH + G.runway) + "px";
-        s.stage.style.height = stageH + "px";
+      var stemH = Math.max(110, Math.min(300, vh * 0.28));
+      G = { vh: vh, gap: gap, cw: cw, ch: ch, stemH: stemH, D: vh * 0.5 };
+      sections.forEach(function (s, si) {
+        var rows = Math.ceil(s.cards.length / COLS);
         var rowW = COLS * cw + (COLS - 1) * gap;
+        s.stem.style.height = (stemH + 14) + "px";
         s.grid.style.width = rowW + "px";
-        s.grid.style.marginLeft = (-rowW / 2) + "px";
-        s.grid.style.top = G.y0 + "px";
+        s.grid.style.height = (rows * ch + (rows - 1) * gap) + "px";
+        s.sec.style.marginBottom = (si === sections.length - 1 ? 0 : Math.round(vh * 0.26)) + "px";
         s.cards.forEach(function (c, i) {
           c.style.width = cw + "px"; c.style.height = ch + "px";
           c.style.left = ((i % COLS) * (cw + gap)) + "px";
           c.style.top = (Math.floor(i / COLS) * (ch + gap)) + "px";
         });
       });
+      document.getElementById("end").style.height = Math.round(vh * 0.5) + "px";
     }
 
     function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -308,32 +304,24 @@
 
     /* ---- Кадр: усе залежить тільки від позиції скролу ---- */
     function frame() {
-      var topH = G.topH, stageH = G.stageH, y0 = G.y0, ch = G.ch, gap = G.gap;
+      var vh = G.vh, gap = G.gap, ch = G.ch;
       var active = sections[0].year;
       sections.forEach(function (s) {
-        var r = s.sec.getBoundingClientRect();
-        var p = reduce ? 1 : clamp((topH - r.top) / G.runway, 0, 1);
-        if (r.top <= topH + stageH * 0.5) active = s.year;
+        var ys = s.stem.getBoundingClientRect().top;   /* де зараз початок стрілки */
+        if (ys <= vh * 0.55) active = s.year;
 
-        /* 1) стрілка витягується вниз */
-        var tip = G.Ls + (G.Llong - G.Ls) * ease(clamp(p / 0.2, 0, 1));
+        /* 1) стрілка витягується вниз, коли рік заїжджає в екран */
+        var a = reduce ? 1 : ease(clamp((vh * 0.9 - ys) / (vh * 0.3), 0, 1));
+        s.line.style.height = (a * G.stemH) + "px";
 
-        /* 2) роботи прилітають знизу, кожна зі своєю затримкою */
-        var minTop = Infinity;
+        /* 2) роботи прилітають знизу, кожна зі своєю затримкою; далі лишаються на місці й гортаються разом зі сторінкою */
         s.cards.forEach(function (c, i) {
           var col = i % COLS, row = Math.floor(i / COLS);
-          var start = 0.22 + col * 0.035 + row * 0.05;
-          var e = ease(clamp((p - start) / 0.3, 0, 1));
-          var rest = y0 + row * (ch + gap);
-          var off = (1 - e) * (stageH - rest + 30);
-          c.style.transform = "translate3d(0," + off + "px,0)";
+          var ref = ys + row * (ch + gap) * 0.6 + col * vh * 0.02;
+          var e = reduce ? 1 : ease(clamp((vh * 0.62 - ref) / (vh * 0.4), 0, 1));
+          c.style.transform = "translate3d(0," + ((1 - e) * G.D) + "px,0)";
           c.style.setProperty("--tr", Math.min(240, (1 - e) * (50 + col * 40 + row * 30)) + "px");
-          minTop = Math.min(minTop, rest + off);
         });
-
-        /* 3) стрілка відступає, поки роботи займають місце під нею */
-        tip = clamp(Math.min(tip, minTop - 14), G.Ls, G.Llong);
-        s.stem.style.height = tip + "px";
       });
       setYear(active);
     }
