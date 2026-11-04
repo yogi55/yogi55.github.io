@@ -169,6 +169,15 @@
       { year: 2016, works: placeholders(8) }
     ];
 
+    /* ---- ВІДЧУТТЯ СКРОЛУ (у пікселях скролу; одне «клацання» колеса ≈ 100 px) ---- */
+    var FEEL = {
+      arrow: 350,      /* стрілка витягується вниз */
+      hold: 250,       /* пауза між роками: ~2-3 клацання */
+      liftRatio: 1.6,  /* скільки скролу на 1 px підйому вмісту (більше = повільніше) */
+      flyBase: 250,    /* політ року: базова довжина ... */
+      perWork: 80      /* ... плюс по стільки на кожну роботу (~1 клацання на роботу) */
+    };
+
     var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     var topEl = document.querySelector(".top");
     var main = document.getElementById("years");
@@ -302,7 +311,7 @@
       G = { vh: vh, topH: topH, pinH: pinH, gap: gap, cw: cw, ch: ch,
             stemBlock: stemBlock, Lrest: stemBlock - 14, Llong: pinH - 24,
             worldH: stemBlock + gridH + vh * 0.08,
-            hold: vh * 0.25 };   /* пауза між роками: приблизно 2-3 «клацання» колеса */
+            hold: FEEL.hold };
       var rowW = COLS * cw + (COLS - 1) * gap;
       document.documentElement.style.setProperty("--topH", topH + "px");
       pin.style.height = pinH + "px";
@@ -328,14 +337,14 @@
       if (reduce) {
         segs.push({ t: "scroll", a: 0, b: worldEnd, len: worldEnd });
       } else {
-        segs.push({ t: "arrow", len: vh * 0.4 });
+        segs.push({ t: "arrow", len: FEEL.arrow });
         sections.forEach(function (s, k) {
           var ne = Math.max(eff, fitEff(s));
           if (k > 0) segs.push({ t: "hold", len: G.hold });
           /* спершу вміст повільно підсувається вгору, звільняючи місце під новий рік */
-          if (ne > eff) { segs.push({ t: "lift", a: eff, b: ne, len: (ne - eff) * 2 }); eff = ne; }
+          if (ne > eff) { segs.push({ t: "lift", a: eff, b: ne, len: (ne - eff) * FEEL.liftRatio }); eff = ne; }
           /* потім роботи по одній долітають; чим їх більше, тим довше */
-          segs.push({ t: "fly", k: k, len: vh * (0.45 + 0.05 * s.cards.length) });
+          segs.push({ t: "fly", k: k, len: FEEL.flyBase + FEEL.perWork * s.cards.length });
         });
         if (worldEnd > eff) segs.push({ t: "scroll", a: eff, b: worldEnd, len: worldEnd - eff });
       }
