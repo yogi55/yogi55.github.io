@@ -189,11 +189,13 @@
       counter.setAttribute("aria-label", String(y));
     }
 
-    /* ---- Секції років ---- */
+    /* ---- Одна суцільна сітка: роботи всіх років підряд, кожен рік з нового ряду ---- */
+    var stem = document.createElement("div"); stem.className = "stem"; stem.innerHTML = "<i><b></b></i>";
+    var line = stem.firstChild;
+    var grid = document.createElement("div"); grid.className = "grid";
+    main.appendChild(stem); main.appendChild(grid);
+    var totalRows = 0;
     var sections = YEARS.map(function (y) {
-      var sec = document.createElement("section"); sec.className = "year";
-      var stem = document.createElement("div"); stem.className = "stem"; stem.innerHTML = "<i><b></b></i>";
-      var grid = document.createElement("div"); grid.className = "grid";
       var cards = y.works.map(function (w, wi) {
         var c = document.createElement("figure"); c.className = "card";
         c.tabIndex = 0; c.setAttribute("role", "button");
@@ -203,8 +205,9 @@
         c.appendChild(t); grid.appendChild(c);
         return c;
       });
-      sec.appendChild(stem); sec.appendChild(grid); main.appendChild(sec);
-      return { year: y.year, sec: sec, stem: stem, line: stem.firstChild, grid: grid, cards: cards };
+      var sec = { year: y.year, cards: cards, rowStart: totalRows };
+      totalRows += Math.ceil(cards.length / COLS);
+      return sec;
     });
 
     /* ---- Перегляд роботи на весь екран ---- */
@@ -282,21 +285,21 @@
       var cw = Math.min(156, (gridW - gap * (COLS - 1)) / COLS);
       var ch = cw * A4;
       var stemH = Math.max(110, Math.min(300, vh * 0.28));
-      G = { vh: vh, gap: gap, cw: cw, ch: ch, stemH: stemH, D: vh * 0.5 };
-      sections.forEach(function (s, si) {
-        var rows = Math.ceil(s.cards.length / COLS);
-        var rowW = COLS * cw + (COLS - 1) * gap;
-        s.stem.style.height = (stemH + 14) + "px";
-        s.grid.style.width = rowW + "px";
-        s.grid.style.height = (rows * ch + (rows - 1) * gap) + "px";
-        s.sec.style.marginBottom = (si === sections.length - 1 ? 0 : Math.round(vh * 0.26)) + "px";
+      var Lmin = Math.max(56, Math.min(100, vh * 0.09));
+      G = { vh: vh, gap: gap, cw: cw, ch: ch, stemH: stemH, Lmin: Lmin, D: vh * 0.6 };
+      var rowW = COLS * cw + (COLS - 1) * gap;
+      stem.style.height = (stemH + 14) + "px";
+      grid.style.width = rowW + "px";
+      grid.style.height = (totalRows * ch + (totalRows - 1) * gap) + "px";
+      sections.forEach(function (s) {
         s.cards.forEach(function (c, i) {
+          var row = s.rowStart + Math.floor(i / COLS);
           c.style.width = cw + "px"; c.style.height = ch + "px";
           c.style.left = ((i % COLS) * (cw + gap)) + "px";
-          c.style.top = (Math.floor(i / COLS) * (ch + gap)) + "px";
+          c.style.top = (row * (ch + gap)) + "px";
         });
       });
-      document.getElementById("end").style.height = Math.round(vh * 0.5) + "px";
+      document.getElementById("end").style.height = Math.round(G.D) + "px";
     }
 
     function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
@@ -305,23 +308,27 @@
     /* ---- Кадр: усе залежить тільки від позиції скролу ---- */
     function frame() {
       var vh = G.vh, gap = G.gap, ch = G.ch;
+      var sy = window.pageYOffset;
+      var gridTop = grid.getBoundingClientRect().top;
+
+      /* 1) на початку стрілка витягується вниз */
+      var a = reduce ? 1 : ease(clamp(sy / (vh * 0.3), 0, 1));
+      line.style.height = (G.Lmin + (G.stemH - G.Lmin) * a) + "px";
+
+      /* 2) потім роботи прилітають знизу й лишаються в сітці; наступний рік долітає під попередніми */
+      var hold = reduce ? 0 : (1 - clamp((sy - vh * 0.25) / (vh * 0.45), 0, 1)) * vh * 0.6;
       var active = sections[0].year;
       sections.forEach(function (s) {
-        var ys = s.stem.getBoundingClientRect().top;   /* де зараз початок стрілки */
-        if (ys <= vh * 0.55) active = s.year;
-
-        /* 1) стрілка витягується вниз, коли рік заїжджає в екран */
-        var a = reduce ? 1 : ease(clamp((vh * 0.9 - ys) / (vh * 0.3), 0, 1));
-        s.line.style.height = (a * G.stemH) + "px";
-
-        /* 2) роботи прилітають знизу, кожна зі своєю затримкою; далі лишаються на місці й гортаються разом зі сторінкою */
+        var firstE = 0;
         s.cards.forEach(function (c, i) {
-          var col = i % COLS, row = Math.floor(i / COLS);
-          var ref = ys + row * (ch + gap) * 0.6 + col * vh * 0.02;
-          var e = reduce ? 1 : ease(clamp((vh * 0.62 - ref) / (vh * 0.4), 0, 1));
+          var col = i % COLS, row = s.rowStart + Math.floor(i / COLS);
+          var ref = gridTop + row * (ch + gap) + col * vh * 0.02 + hold;
+          var e = reduce ? 1 : ease(clamp((vh - ref) / (vh * 0.4), 0, 1));
+          if (i === 0) firstE = e;
           c.style.transform = "translate3d(0," + ((1 - e) * G.D) + "px,0)";
-          c.style.setProperty("--tr", Math.min(240, (1 - e) * (50 + col * 40 + row * 30)) + "px");
+          c.style.setProperty("--tr", Math.min(240, (1 - e) * (50 + col * 40 + row * 20)) + "px");
         });
+        if (firstE > 0.3) active = s.year;
       });
       setYear(active);
     }
